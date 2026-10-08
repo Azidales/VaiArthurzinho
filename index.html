@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101631">
+<meta name="description" content="Aperte o botão e ouça: vai arthurzinho!">
+<title>Vai, Arthurzinho!</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23101631'/%3E%3Cpath d='M25 15h14l12 34H39l-2-7H26l-2 7H13zm4 18h5l-2-9z' fill='%23d7ff59'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#101631;color:#fff}*{box-sizing:border-box}body{margin:0;min-width:280px}main{min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;overflow:hidden}.eyebrow{color:#b4bad1;font-size:.875rem;font-weight:650;letter-spacing:.2em;text-transform:uppercase;margin:0 0 24px}h1{font-size:clamp(2.75rem,10vw,5.6rem);line-height:1.05;letter-spacing:-.055em;margin:0;font-weight:850}h1 span{color:#d7ff59;display:block}.hint{color:#bcc2d9;font-size:1rem;margin:24px 0 40px;line-height:1.6}.button-wrap{padding:12px;position:relative}button{width:clamp(196px,56vw,248px);aspect-ratio:1;border-radius:50%;border:2px solid #e6ff9a;background:#d7ff59;color:#172500;box-shadow:0 12px 0 #829e2f,0 24px 60px #0006;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .15s,box-shadow .15s,background .15s}button:hover{background:#e2ff86}button:active,button.playing{transform:translateY(8px);box-shadow:0 4px 0 #829e2f,0 12px 36px #0005}button:focus-visible{outline:3px solid #fff;outline-offset:10px}button:disabled{cursor:default}button span{font-size:1.1rem;font-weight:800;letter-spacing:.12em}button svg{width:52px;height:52px}.status{min-height:3.2em;max-width:340px;color:#bcc2d9;font-size:.95rem;line-height:1.6;margin:32px 0 0}.wave{display:flex;gap:5px;height:25px;align-items:center;margin-top:20px;color:#d7ff59}.wave i{width:4px;height:5px;background:currentColor;border-radius:4px}.speaking .wave i{animation:bounce .65s ease-in-out infinite alternate}.wave i:nth-child(2){animation-delay:-.2s}.wave i:nth-child(3){animation-delay:-.4s}.wave i:nth-child(4){animation-delay:-.1s}.wave i:nth-child(5){animation-delay:-.3s}@keyframes bounce{to{height:24px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}@media(max-height:650px){main{padding:24px}h1{font-size:2.8rem}.hint{margin:16px 0 20px}button{width:180px}.eyebrow{margin-bottom:16px}.status{margin-top:24px}.wave{margin-top:8px}}
+</style>
+</head>
+<body>
+<main id="app">
+<p class="eyebrow">Dá aquela força</p>
+<h1>Vai,<span>Arthurzinho!</span></h1>
+<p class="hint">Um toque. Uma torcida.</p>
+<div class="button-wrap"><button id="play" type="button" aria-label="Ouvir vai arthurzinho">
+<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 11 18H5v12h6l11 9V9Z"/><path d="M30 16a12 12 0 0 1 0 16M36 10a20 20 0 0 1 0 28"/></svg>
+<span id="label">APERTE</span>
+</button></div>
+<div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<p class="status" id="status" role="status" aria-live="polite">Aumente o volume e aperte o botão.</p>
+</main>
+<script>
+'use strict';
+const button = document.getElementById('play');
+const label = document.getElementById('label');
+const status = document.getElementById('status');
+const app = document.getElementById('app');
+const synth = window.speechSynthesis;
+let voices = [];
+let currentUtterance = null;
+let watchdog;
+function loadVoices() { voices = synth ? synth.getVoices() : []; }
+function preferredVoice() {
+  const portuguese = voices.filter(v => /^pt[-_]BR$/i.test(v.lang));
+  // SpeechSynthesis exposes no gender field. Prefer known masculine voice
+  // names, then preserve Brazilian Portuguese even when none is available.
+  const masculine = /\b(Ant[oô]nio|Daniel|Ricardo|Felipe|Fabio|Fábio|Duarte)\b|\bmale\b/i;
+  return portuguese.find(v => masculine.test(v.name))
+    || portuguese.find(v => /Google|Natural/i.test(v.name))
+    || portuguese[0]
+    || voices.find(v => /^pt\b/i.test(v.lang) && masculine.test(v.name))
+    || voices.find(v => /^pt\b/i.test(v.lang));
+}
+function finish(message) {
+  clearTimeout(watchdog);
+  app.classList.remove('speaking');
+  button.classList.remove('playing');
+  button.disabled = false;
+  label.textContent = 'APERTE';
+  status.textContent = message;
+  currentUtterance = null;
+}
+if (!synth || !window.SpeechSynthesisUtterance) {
+  button.disabled = true;
+  status.textContent = 'Este navegador não oferece voz. Abra o app no Chrome ou Safari para ouvir.';
+} else {
+  loadVoices();
+  synth.addEventListener('voiceschanged', loadVoices);
+  button.addEventListener('click', () => {
+    synth.cancel();
+    loadVoices();
+    const utterance = new SpeechSynthesisUtterance('Vai, Arthurzinho!');
+    currentUtterance = utterance;
+    const voice = preferredVoice();
+    if (voice) utterance.voice = voice;
+    utterance.lang = 'pt-BR';
+    utterance.rate = 0.96;
+    utterance.pitch = 0.78;
+    utterance.volume = 1;
+    button.disabled = true;
+    label.textContent = 'OUVINDO';
+    status.textContent = 'Preparando a voz…';
+    utterance.onstart = () => {
+      if (currentUtterance !== utterance) return;
+      app.classList.add('speaking');
+      button.classList.add('playing');
+      status.textContent = 'Vai, Arthurzinho!';
+    };
+    utterance.onend = () => {
+      if (currentUtterance === utterance) finish('Mais uma? É só apertar.');
+    };
+    utterance.onerror = () => {
+      if (currentUtterance === utterance) finish('Não foi possível reproduzir. Confira a voz em português do aparelho e tente novamente.');
+    };
+    watchdog = setTimeout(() => {
+      if (currentUtterance === utterance) {
+        finish('A voz não respondeu. Confira o áudio do aparelho e tente novamente.');
+        synth.cancel();
+      }
+    }, 15000);
+    try { synth.speak(utterance); }
+    catch { finish('Não foi possível reproduzir. Tente novamente.'); }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && currentUtterance) {
+      finish('Aperte para ouvir de novo.');
+      synth.cancel();
+    }
+  });
+}
+
+</script>
+</body>
+</html>
